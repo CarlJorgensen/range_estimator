@@ -67,30 +67,29 @@ def CRLB():
     ds2 = np.gradient(signal2, tau)
 
     SNR_range = np.linspace(10, 30, 100)
-    SNR = 10**(SNR_range/10)
 
-    F1 = np.sum((ds1**2))
-    F2 = np.sum((ds2**2))
+    sigma_squared = 10**(-SNR_range/10)
+
+    F1 = np.sum( ds1**2 )
+    F2 = np.sum( ds2**2 )
     
-    CRLB_1 = 1/(F1 * SNR)
-    CRLB_2 = 1/(F2 * SNR)
+    CRLB_1 = sigma_squared/F1
+    CRLB_2 = sigma_squared/F2
 
-    plt.loglog(SNR, np.sqrt(CRLB_1), 'r', label="sqrt(CRLB_1)")
-    plt.loglog(SNR, np.sqrt(CRLB_2), 'g', label="sqrt(CRLB_2)")    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    plt.semilogy(SNR_range, np.sqrt(CRLB_1), 'r', label=r"$\sqrt{\mathrm{CRB}_1}$")
+    plt.semilogy(SNR_range, np.sqrt(CRLB_2), 'g', label=r"$\sqrt{\mathrm{CRB}_2}$")    
     plt.xlabel("SNR [dB]")
     plt.legend(loc="upper right")
-    plt.grid(True)
-    plt.show()
+    plt.grid(True, which="both", ls="--")   
+
+    return fig, ax
 
 
-def maximum_likelihood(sigma: float, grid_size: float):
+def maximum_likelihood(a1: float, a2: float, Trange: np.array, sigma_squared: float, grid_size: float):
     """
     T_ML = argmax_{T} sum_{n} x[n*tau]s[n*tau-T]
     """
-
-    a1, a2 = calc_const()
-    tau = 0.1
-    Trange = np.arange(-15, 15, tau)
     T_est_range = np.arange(-5, 5, grid_size)
 
     T = np.random.uniform(-5, 5)
@@ -100,7 +99,7 @@ def maximum_likelihood(sigma: float, grid_size: float):
     sum1 = -1000
     sum2 = -1000
 
-    e = np.random.normal(loc=0, scale=sigma**2, size=len(Trange))
+    e = np.random.normal(loc=0, scale=np.sqrt(sigma_squared), size=len(Trange))
 
     x1 = a1 * s1(Trange - T) + e
     x2 = a2 * s2(Trange - T) + e
@@ -137,34 +136,40 @@ def maximum_likelihood(sigma: float, grid_size: float):
 
 def monte_carlo():
 
-    nr_iter = 10
+    nr_iter = 1000
     SNR_range = np.linspace(10, 30, 100)
 
     RMSE1 = np.zeros(len(SNR_range))
     RMSE2 = np.zeros(len(SNR_range))
+
+    a1, a2 = calc_const()
+    tau = 0.1
+    Trange = np.arange(-15, 15, tau)
+    grid_size = 0.01
 
     for i, SNR in tqdm(enumerate(SNR_range), desc="SNR"):
         T1_ML = np.zeros(nr_iter)
         T2_ML = np.zeros(nr_iter)
         T_true = np.zeros(nr_iter)
         for j in tqdm(range(nr_iter), desc="Iteration", leave=False):
-            sigma = 1/(10**(SNR/10))
-            T1, T2, T = maximum_likelihood(sigma, 0.1)
+            sigma_squared = 10**(-SNR/10)
+            T1, T2, T = maximum_likelihood(a1, a2, Trange, sigma_squared, grid_size)
             T1_ML[j] = T1
             T2_ML[j] = T2
             T_true[j] = T
         
-        RMSE1[i] = np.sqrt(((T1_ML - T_true)**2))
-        RMSE1[i] = np.sqrt(((T1_ML - T_true)**2))
-    
-    plt.figure(figsize=(10, 6))
-    plt.plot(SNR_range, RMSE1, 'r', label="RMSE1")
-    plt.plot(SNR_range, RMSE2, 'g', label="RMSE2")
+        RMSE1[i] = np.sqrt(np.mean(((T1_ML - T_true)**2)))
+        RMSE2[i] = np.sqrt(np.mean(((T2_ML - T_true)**2)))
+
+    _, ax = CRLB()
+    ax.semilogy(SNR_range, RMSE1, 'r', label=r"$\mathrm{RMSE}_1}$")
+    ax.semilogy(SNR_range, RMSE2, 'g', label=r"$\mathrm{RMSE}_2}$")
     plt.show()
 
 
-#maximum_likelihood(1, 0.001)
+#maximum_likelihood(a1=calc_const()[0], a2=calc_const()[1], Trange = np.arange(-15, 15, 0.1), sigma_squared=0.1, grid_size=0.01)
 monte_carlo()
+#CRLB()
 
 
 
